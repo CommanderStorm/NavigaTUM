@@ -232,8 +232,8 @@ const suggestLocationFix = () => {
     <div class="flex flex-col gap-6">
       <DetailsBuildingOverviewSection :buildings="data.sections?.buildings_overview"/>
       <ClientOnly>
-        <LazyDetailsRoomOverviewSection :rooms="data.sections?.rooms_overview"/>
         <LazyDetailsNearbyTransportSection :id="data.id"/>
+        <LazyDetailsRoomOverviewSection :rooms="data.sections?.rooms_overview"/>
       </ClientOnly>
       <DetailsSources
         :coords="data.coords"
