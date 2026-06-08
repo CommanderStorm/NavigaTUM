@@ -1,47 +1,21 @@
 import type { DeepWritable } from "ts-essentials";
+import type { ComputedRef } from "vue";
 import type { components } from "~/api_types";
+import {
+  type AdditionDraft,
+  type AdditionKind,
+  additionVariants,
+  type DraftFor,
+  emptyAdditionDraft,
+} from "~/composables/additionVariants";
 
 type EditRequest = components["schemas"]["EditRequest"];
 type EditRequestData = Omit<EditRequest, "privacy_checked" | "token" | "edits" | "additions"> & {
   edits: NonNullable<EditRequest["edits"]>;
   additions: NonNullable<EditRequest["additions"]>;
 };
-type BuildingKind = components["schemas"]["BuildingKind"];
-type AdditionKind = "room" | "building" | "poi";
 
-type LinkDraft = { text_de: string; text_en: string; url: string };
-type GenericPropDraft = { name_de: string; name_en: string; text: string };
-
-type AdditionDraft = {
-  kind: AdditionKind | null;
-  id: string;
-  parent_id: string;
-  parent_name: string;
-  coords: { lat: number; lon: number; picked: boolean };
-  // room-only
-  alt_name: string;
-  arch_name: string;
-  usage_id: number | null;
-  floor_type: string;
-  floor_level: string;
-  seats: { sitting: number | null; standing: number | null; wheelchair: number | null };
-  room_links: LinkDraft[];
-  // building-only
-  name: string;
-  short_name: string;
-  node_kind: BuildingKind | null;
-  building_prefixes: string[];
-  internal_id: string;
-  visible_id: string;
-  // poi-only
-  usage_name: string;
-  comment_de: string;
-  comment_en: string;
-  poi_links: LinkDraft[];
-  generic_props: GenericPropDraft[];
-};
-
-type PropertyFields = {
+interface PropertyFields {
   name: string;
   shortName: string;
   categoryDe: string;
@@ -51,8 +25,8 @@ type PropertyFields = {
   linkUrl: string;
   linkTextDe: string;
   linkTextEn: string;
-};
-type EditProposalState = {
+}
+interface EditProposalState {
   open: boolean;
   addOpen: boolean;
   selected: {
@@ -78,7 +52,7 @@ type EditProposalState = {
   propertyFields: PropertyFields;
   originalPropertyFields: PropertyFields;
   pendingAddition: AdditionDraft;
-};
+}
 
 function emptyPropertyFields(): PropertyFields {
   return {
@@ -91,34 +65,6 @@ function emptyPropertyFields(): PropertyFields {
     linkUrl: "",
     linkTextDe: "",
     linkTextEn: "",
-  };
-}
-
-function emptyAdditionDraft(): AdditionDraft {
-  return {
-    kind: null,
-    id: "",
-    parent_id: "",
-    parent_name: "",
-    coords: { lat: 0, lon: 0, picked: false },
-    alt_name: "",
-    arch_name: "",
-    usage_id: null,
-    floor_type: "",
-    floor_level: "",
-    seats: { sitting: null, standing: null, wheelchair: null },
-    room_links: [],
-    name: "",
-    short_name: "",
-    node_kind: null,
-    building_prefixes: [],
-    internal_id: "",
-    visible_id: "",
-    usage_name: "",
-    comment_de: "",
-    comment_en: "",
-    poi_links: [],
-    generic_props: [],
   };
 }
 
@@ -159,5 +105,16 @@ function emptyRoomEdit() {
   return { coordinate: null, image: null, properties: null };
 }
 
-export type { AdditionDraft, AdditionKind, GenericPropDraft, LinkDraft, PropertyFields };
-export { emptyAdditionDraft, emptyPropertyFields, emptyRoomEdit };
+// Hands a field sub-component the live draft narrowed to its own kind, so it can bind variant-only
+// fields without re-checking `kind`. A sub-component renders only while its kind is active; the
+// empty fallback keeps the type honest for the brief unmount tick after a kind switch.
+function useAdditionDraft<K extends AdditionKind>(kind: K): ComputedRef<DraftFor<K>> {
+  const editProposal = useEditProposal();
+  return computed(() => {
+    const draft = editProposal.value.pendingAddition;
+    return draft.kind === kind ? (draft as DraftFor<K>) : additionVariants[kind].empty();
+  });
+}
+
+export type { PropertyFields };
+export { emptyPropertyFields, emptyRoomEdit, useAdditionDraft };

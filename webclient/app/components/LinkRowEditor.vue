@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { mdiClose, mdiPlus } from "@mdi/js";
-import type { LinkDraft } from "~/composables/editProposal";
+import type { LinkDraft } from "~/composables/additionVariants";
 
 const links = defineModel<LinkDraft[]>({ required: true });
 const { t } = useI18n({ useScope: "local" });

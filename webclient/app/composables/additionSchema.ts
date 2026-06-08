@@ -1,9 +1,8 @@
 // Zod schemas for the "propose a new entry" forms. These intentionally mirror the Rust validators
 // in `server/src/routes/feedback/proposed_edits/addition/{room,building,poi}.rs`. Whenever the
 // backend rules change, update both - the matching `case` in each Rust validator's rstest table
-// is the source of truth.
+// is the source of truth. Each schema is wired to its kind in `additionVariants.ts`.
 import { z } from "zod";
-import type { AdditionDraft } from "~/composables/editProposal";
 
 // Shared with `MAX_NAME_LEN` in the backend (room.rs / building.rs / poi.rs).
 const MAX_NAME_LEN = 200;
@@ -50,7 +49,7 @@ export const buildingPrefixSchema = z
   .string()
   .refine((p) => BUILDING_PREFIX_RE.test(p), "error.building_prefix_format");
 
-const newRoomSchema = z.object({
+export const newRoomSchema = z.object({
   kind: z.literal("room"),
   id: roomKeySchema,
   parent_id: z.string().min(1, "error.parent_required"),
@@ -60,7 +59,7 @@ const newRoomSchema = z.object({
   coords: coordsSchema,
 });
 
-const newBuildingSchema = z
+export const newBuildingSchema = z
   .object({
     kind: z.literal("building"),
     id: z.string().min(1, "error.id_required"),
@@ -90,7 +89,7 @@ const newBuildingSchema = z
     }
   });
 
-const newPoiSchema = z.object({
+export const newPoiSchema = z.object({
   kind: z.literal("poi"),
   id: poiKeySchema,
   parent_id: z.string().min(1, "error.parent_required"),
@@ -98,34 +97,3 @@ const newPoiSchema = z.object({
   usage_name: z.string().min(1, "error.usage_name_required"),
   coords: coordsSchema,
 });
-
-export type AdditionFieldErrors = Partial<Record<string, string>>;
-
-export function validateAddition(draft: AdditionDraft): AdditionFieldErrors {
-  if (!draft.kind) return {};
-  const schema =
-    draft.kind === "room"
-      ? newRoomSchema
-      : draft.kind === "building"
-        ? newBuildingSchema
-        : newPoiSchema;
-  const result = schema.safeParse(draft);
-  if (result.success) return {};
-  const errors: AdditionFieldErrors = {};
-  for (const issue of result.error.issues) {
-    const path = issue.path.join(".") || "_";
-    if (!errors[path]) errors[path] = issue.message;
-  }
-  return errors;
-}
-
-export function isAdditionValid(draft: AdditionDraft): boolean {
-  if (!draft.kind) return false;
-  const schema =
-    draft.kind === "room"
-      ? newRoomSchema
-      : draft.kind === "building"
-        ? newBuildingSchema
-        : newPoiSchema;
-  return schema.safeParse(draft).success;
-}

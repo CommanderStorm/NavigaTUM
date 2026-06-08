@@ -3,8 +3,15 @@ import { Tab, TabGroup, TabList } from "@headlessui/vue";
 import { mdiDomain, mdiMapMarker, mdiSofa } from "@mdi/js";
 import { useDebounceFn } from "@vueuse/core";
 import type { components } from "~/api_types";
-import { type AdditionFieldErrors, validateAddition } from "~/composables/additionSchema";
-import { type AdditionKind, emptyAdditionDraft, useEditProposal } from "~/composables/editProposal";
+import {
+  type AdditionFieldErrors,
+  type AdditionKind,
+  buildAddition,
+  emptyAdditionDraft,
+  emptyDraftFor,
+  validateAddition,
+} from "~/composables/additionVariants";
+import { useAdditionDraft, useEditProposal } from "~/composables/editProposal";
 
 type FacetFilter = components["schemas"]["FacetFilter"];
 
@@ -23,6 +30,17 @@ const kindIndex = computed(() => {
   const k = editProposal.value.pendingAddition.kind;
   return k ? kindOptions.findIndex((o) => o.value === k) : -1;
 });
+
+// Picking a kind swaps in that variant's empty draft. Switching kinds clears the form on purpose:
+// ids, parents, and most fields are kind-specific, so carrying them over would leave stale values.
+function selectKind(kind: AdditionKind) {
+  if (editProposal.value.pendingAddition.kind === kind) return;
+  editProposal.value.pendingAddition = emptyDraftFor(kind);
+}
+
+// The room display name lives in the modal (between parent and id), so bind it through a narrowed
+// draft rather than the union; only read while the room tab is active.
+const roomDraft = useAdditionDraft("room");
 // Debounce + verify the id against /api/locations/{id}; 200 means collision, 404 means free.
 const idCheckPending = ref(false);
 const idCollidesOnServer = ref(false);
@@ -158,75 +176,6 @@ const draftIsReady = computed(() => {
   return Object.keys(fieldErrors.value).length === 0;
 });
 
-function buildAddition(): components["schemas"]["LimitedHashMap_String_Addition"][string] | null {
-  const draft = editProposal.value.pendingAddition;
-  const coords = { lat: draft.coords.lat, lon: draft.coords.lon };
-  if (draft.kind === "room") {
-    const seats =
-      draft.seats.sitting !== null ||
-      draft.seats.standing !== null ||
-      draft.seats.wheelchair !== null
-        ? {
-            sitting: draft.seats.sitting,
-            standing: draft.seats.standing,
-            wheelchair: draft.seats.wheelchair,
-          }
-        : null;
-    const links = draft.room_links.filter((l) => l.url.trim());
-    return {
-      kind: "room",
-      parent_building_id: draft.parent_id,
-      alt_name: draft.alt_name,
-      arch_name: draft.arch_name,
-      usage_id: draft.usage_id as number,
-      coords,
-      seats,
-      floor_type: draft.floor_type || null,
-      floor_level: draft.floor_level || null,
-      // Address omitted on purpose: the server inherits it from the parent building.
-      address: null,
-      links: links.length ? links : undefined,
-    } as components["schemas"]["LimitedHashMap_String_Addition"][string];
-  }
-  if (draft.kind === "building") {
-    if (!draft.node_kind) return null;
-    return {
-      kind: "building",
-      parent_id: draft.parent_id,
-      name: draft.name,
-      short_name: draft.short_name || null,
-      node_kind: draft.node_kind,
-      building_prefixes: [...draft.building_prefixes],
-      internal_id: draft.internal_id || null,
-      visible_id: draft.visible_id || null,
-      coords,
-    } as components["schemas"]["LimitedHashMap_String_Addition"][string];
-  }
-  if (draft.kind === "poi") {
-    const links = draft.poi_links
-      .filter((l) => l.url.trim())
-      .map((l) => ({ url: l.url, text: { de: l.text_de, en: l.text_en } }));
-    const generic_props = draft.generic_props
-      .filter((p) => p.name_de.trim() || p.name_en.trim() || p.text.trim())
-      .map((p) => ({ name: { de: p.name_de, en: p.name_en }, text: p.text }));
-    const comment =
-      draft.comment_de.trim() || draft.comment_en.trim()
-        ? { de: draft.comment_de, en: draft.comment_en }
-        : null;
-    return {
-      kind: "poi",
-      parent: draft.parent_id,
-      name: draft.name,
-      usage_name: draft.usage_name,
-      coords,
-      comment,
-      links: links.length ? links : undefined,
-      generic_props: generic_props.length ? generic_props : undefined,
-    } as components["schemas"]["LimitedHashMap_String_Addition"][string];
-  }
-  return null;
-}
-
 function commitDraft(): { id: string; displayName: string } | null {
   localError.value = "";
   const id = editProposal.value.pendingAddition.id.trim();
@@ -242,14 +191,19 @@ function commitDraft(): { id: string; displayName: string } | null {
     localError.value = t("error.id_exists_on_server");
     return null;
   }
-  const addition = buildAddition();
+  const draft = editProposal.value.pendingAddition;
+  const addition = buildAddition(draft);
   if (!addition) {
     localError.value = t("error.incomplete");
     return null;
   }
-  const draft = editProposal.value.pendingAddition;
   // Best display name we have for the just-added entry, used by the image-upload flow.
-  const displayName = (draft.kind === "room" ? draft.alt_name : draft.name) || id;
+  const displayName =
+    draft.kind === "room"
+      ? draft.alt_name || id
+      : draft.kind === "building" || draft.kind === "poi"
+        ? draft.name || id
+        : id;
   // The OpenAPI types are readonly; round-trip through JSON to land on a mutable structural
   // clone matching the LimitedHashMap value type expected by `data.additions`.
   editProposal.value.data.additions[id] = JSON.parse(JSON.stringify(addition));
@@ -358,7 +312,7 @@ watch(
                 'focus:outline-none focus:ring-2 transition-all',
                 kindIndex === kindOptions.indexOf(opt) ? 'bg-white dark:bg-black text-zinc-700 dark:text-zinc-200 shadow' : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/[0.12] dark:hover:bg-black/[0.12] hover:text-zinc-700 dark:hover:text-zinc-200',
               ]"
-              @click="editProposal.pendingAddition.kind = opt.value"
+              @click="selectKind(opt.value)"
             >
               <div class="flex items-center justify-center gap-2">
                 <MdiIcon :path="opt.icon" :size="16" />
@@ -389,7 +343,7 @@ watch(
           </label>
           <input
             id="add-room-alt-name"
-            v-model="editProposal.pendingAddition.alt_name"
+            v-model="roomDraft.alt_name"
             type="text"
             class="focusable bg-zinc-200 dark:bg-zinc-700 border-zinc-400 dark:border-zinc-500 text-zinc-900 dark:text-zinc-50 w-full rounded border px-2 py-1 text-sm"
           />
