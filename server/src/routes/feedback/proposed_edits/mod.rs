@@ -292,7 +292,7 @@ impl EditRequest {
 - `Token already used`: Tokens are non reusable/refreshable single-use items."),
         (status = 422, description= "**Unprocessable Entity.** Subject or body missing or too short."),
         (status = 451, description= "**Unavailable for legal reasons.** Using this endpoint without accepting the privacy policy is not allowed. For us to post to GitHub, this has to be true"),
-        (status = 500, description= "**Internal Server Error.** We have a problem communicating with GitHubs servers. Please try again later."),
+        (status = 500, description= "**Internal Server Error.** The edit could not be applied. The body contains the underlying error chain (git, filesystem, or GitHub API) prefixed with `Could not apply changes:`. Please try again later."),
         (status = 503, description= "Service unavailable. We have not configured a GitHub Access Token. This could be because we are experiencing technical difficulties or intentional. Please try again later."),
     )
 )]
@@ -396,7 +396,7 @@ pub async fn propose_edits(
             error!(?error, "could not apply changes");
             HttpResponse::InternalServerError()
                 .content_type("text/plain")
-                .body("Could apply changes, please try again later")
+                .body(format!("Could not apply changes: {error:#}"))
         }
     }
 }
