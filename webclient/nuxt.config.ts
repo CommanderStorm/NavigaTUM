@@ -33,6 +33,15 @@ export default defineNuxtConfig({
       });
     },
   ],
+  vite: {
+    optimizeDeps: {
+      // maplibre-gl v6 boots a module worker resolved relative to its own bundle via
+      // `import.meta.url`. Vite's dep optimizer rewrites the import to the pre-bundled cache,
+      // where the worker file does not exist - the worker request 404s, style processing never
+      // starts, and the map's `load` event never fires on the dev server (prod builds are fine).
+      exclude: ["maplibre-gl"],
+    },
+  },
   css: ["~/assets/css/main.css"],
   app: {
     head: {
