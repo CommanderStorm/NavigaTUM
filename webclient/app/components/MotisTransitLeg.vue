@@ -319,7 +319,7 @@ const hasRestrictedStep = computed(
         <div v-if="leg.steps && leg.steps.length > 0" class="mt-3">
           <details class="group">
             <summary
-              class="text-zinc-600 dark:text-zinc-300 cursor-pointer text-sm font-medium hover:text-zinc-800 dark:hover:text-zinc-100 flex items-center gap-2"
+              class="text-zinc-600 dark:text-zinc-300 cursor-pointer text-sm font-medium hover:text-zinc-800 dark:hover:text-zinc-100 flex flex-wrap items-center gap-2"
             >
               {{ t("walking_instructions") }}
               <span class="text-zinc-400 dark:text-zinc-500 text-xs">({{ leg.steps.length }} {{ t("steps") }})</span>
